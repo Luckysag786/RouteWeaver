@@ -1,0 +1,29 @@
+name: 功能建议
+description: 提议新功能或体验改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: pain
+    attributes:
+      label: 使用痛点
+      description: 请先描述真实场景，而不只是具体实现方案。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 可接受的替代方案
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 范围确认
+      options:
+        - label: 我理解普通应用无法保证接管所有 VPN、UDP、QUIC 或任意 Android 第三方隧道。
+          required: true

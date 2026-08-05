@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="route_blue">#2563EB</color>
+    <color name="route_blue_dark">#173FA4</color>
+    <color name="route_bg">#F4F7FB</color>
+    <color name="route_ink">#14213D</color>
+    <color name="route_muted">#5F6B7A</color>
+    <color name="route_green">#0F9D73</color>
+    <color name="white">#FFFFFF</color>
+</resources>
+
