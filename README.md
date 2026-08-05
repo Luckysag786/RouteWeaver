@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-MIT-16a34a)
 [![CI](https://github.com/Luckysag786/RouteWeaver/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckysag786/RouteWeaver/actions/workflows/ci.yml)
 
-[English](README_EN.md) · [快速上手](#三分钟上手) · [项目架构](docs/ARCHITECTURE.md) · [能力边界](docs/PLATFORM_LIMITS.md) · [开发故事](docs/blog/routeweaver-launch.md)
+[English](README_EN.md) · [普通用户指南](docs/blog/routeweaver-user-guide.md) · [快速上手](#三分钟上手) · [项目架构](docs/ARCHITECTURE.md) · [能力边界](docs/PLATFORM_LIMITS.md) · [开发故事](docs/blog/routeweaver-launch.md)
 
 ## 为什么做这个项目
 

@@ -7,7 +7,7 @@ title: 路由织网 RouteWeaver
 
 路由织网 RouteWeaver 是一款面向中国用户使用习惯设计的开源分流工具：在保留现有 VPN/代理的同时，让真正需要代理的应用和网站走代理，其余国内软件继续使用本地直连。
 
-[阅读完整开发故事](blog/routeweaver-launch.md) · [查看 GitHub 项目](https://github.com/Luckysag786/RouteWeaver) · [查看全部版本](https://github.com/Luckysag786/RouteWeaver/releases)
+[普通用户使用指南](blog/routeweaver-user-guide.md) · [阅读开发故事](blog/routeweaver-launch.md) · [查看 GitHub 项目](https://github.com/Luckysag786/RouteWeaver) · [查看全部版本](https://github.com/Luckysag786/RouteWeaver/releases)
 
 ## 直接下载
 
