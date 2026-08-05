@@ -12,4 +12,4 @@ updates:
     open-pull-requests-limit: 5
     ignore:
       - dependency-name: com.android.application
-        update-types: ["version-update:semver-major"]
+        versions: [">= 8.8.0"]
