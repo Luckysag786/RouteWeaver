@@ -9,4 +9,4 @@ $Iscc = $Candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object
 if (-not $Iscc) { throw 'Inno Setup 6 was not found. Install package JRSoftware.InnoSetup with winget.' }
 & $Iscc (Join-Path $ProjectRoot 'installer\RouteWeaver.iss')
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
-Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $ProjectRoot 'artifacts\RouteWeaver-Windows-Setup-1.3.1.exe') | Format-List
+Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $ProjectRoot 'artifacts\RouteWeaver-Windows-Setup-1.3.2.exe') | Format-List

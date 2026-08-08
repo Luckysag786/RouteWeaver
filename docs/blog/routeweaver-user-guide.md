@@ -23,6 +23,10 @@ description: "RouteWeaver 普通用户使用指南：按应用和网站选择网
 
 <https://luckysag786.github.io/RouteWeaver/>
 
+## 1.3.2 更新说明
+
+2026-08-08 发布的 1.3.2 版修复了 VPN 上游公网 IP 偶发检测失败和部分 HTTPS 链路偶发断开的问题，增加系统代理/PAC/WinHTTP/本地代理自动识别，并加入单实例安全锁。现在重复点击桌面或开始菜单图标时，只会提示已有实例，不会出现多个网关或托盘进程。
+
 ---
 
 ## RouteWeaver 是什么
@@ -121,7 +125,7 @@ example.com
 普通 Windows 用户建议下载：
 
 ```text
-RouteWeaver-Windows-Setup-1.3.1.exe
+RouteWeaver-Windows-Setup-1.3.2.exe
 ```
 
 页面也提供免安装版和文件 SHA-256 校验值。
@@ -199,4 +203,3 @@ RouteWeaver 解决的是一个很实际的问题：
 <https://luckysag786.github.io/RouteWeaver/>
 
 使用网络代理和分流工具时，请遵守所在地法律法规、网络管理要求及相关服务条款。
-

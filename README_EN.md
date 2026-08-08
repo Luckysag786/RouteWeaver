@@ -4,12 +4,16 @@
 
 [中文说明](README.md) · [Architecture](docs/ARCHITECTURE.md) · [Platform limits](docs/PLATFORM_LIMITS.md) · [Release story](docs/blog/routeweaver-launch.md)
 
+## 1.3.2 update
+
+This release adds resilient multi-provider public-IP checks, fixes HTTP CONNECT and TCP half-close handling, expands Windows/PAC/WinHTTP/local-proxy discovery, and enforces one RouteWeaver process per user session.
+
 RouteWeaver is an auditable split-routing gateway placed in front of an existing local HTTP or SOCKS5 proxy. It supports two policies:
 
 - **Forward mapping:** only matched apps or domains use the VPN/proxy; everything else connects directly.
 - **Reverse isolation:** traffic uses the VPN/proxy by default; matched apps or domains connect directly.
 
-The Windows app includes process/application discovery, editable rules, connection activity, real exit-IP checks, transactional system-proxy takeover, startup settings and tray operation.
+The Windows app includes process/application discovery, editable rules, connection activity, resilient real exit-IP checks, transactional system-proxy takeover, automatic upstream discovery, startup settings, tray operation, and a single-instance process guard.
 
 ## Quick start
 

@@ -11,6 +11,7 @@ from .config import ConfigStore
 from .diagnostics import run_diagnostics
 from .gateway import SplitProxyGateway
 from .platform.windows_proxy import SystemProxyManager
+from .platform.windows_single_instance import ensure_single_instance, release_single_instance, show_duplicate_notice
 
 
 def main() -> None:
@@ -19,6 +20,17 @@ def main() -> None:
     parser.add_argument("--gateway-only", action="store_true", help="只启动本地网关，不接管系统代理")
     parser.add_argument("--minimized", action="store_true", help="启动后隐藏到系统托盘")
     args = parser.parse_args()
+    if not args.diagnose and not ensure_single_instance():
+        show_duplicate_notice()
+        return
+    try:
+        _run(args)
+    finally:
+        if not args.diagnose:
+            release_single_instance()
+
+
+def _run(args: argparse.Namespace) -> None:
     config = ConfigStore().load()
     if args.diagnose:
         results = run_diagnostics(config, SystemProxyManager())

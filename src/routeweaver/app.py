@@ -4,6 +4,7 @@ import json
 import queue
 import threading
 import tkinter as tk
+from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Callable
@@ -18,10 +19,12 @@ from .models import ActivityRecord, AppConfig, IpIdentity, RouteMode, RouteTarge
 from .platform.windows_catalog import InstalledApplication, RunningProcess, list_installed_applications, list_running_processes
 from .platform.windows_proxy import SystemProxyManager, is_admin, relaunch_as_admin
 from .platform.windows_startup import initialize_startup, set_startup, startup_enabled
+from .platform.windows_single_instance import ensure_single_instance, release_single_instance
 from .policy import normalize_app
 from .rule_probe import RuleProbeResult, probe_rule
 from .rule_values import normalize_rule_value, rule_value_key
 from .tray import TrayController, TrayUnavailable
+from .upstream import ProxyEndpoint, parse_proxy_setting
 
 
 BG = "#f4f7fb"
@@ -34,42 +37,8 @@ RED = "#d14343"
 
 
 def _split_proxy(value: str) -> tuple[str, str, int] | None:
-    value = value.strip()
-    if not value:
-        return None
-    candidates: list[tuple[str, str]] = []
-    for chunk in value.split(";"):
-        chunk = chunk.strip()
-        if "=" in chunk:
-            key, endpoint = chunk.split("=", 1)
-            if key.lower() in ("http", "https", "socks"):
-                protocol = "socks5" if key.lower() == "socks" else "http"
-                candidates.append((protocol, endpoint))
-        else:
-            lowered = chunk.lower()
-            protocol = "socks5" if lowered.startswith(("socks://", "socks5://")) else "http"
-            candidates.append((protocol, chunk))
-    # Prefer an HTTP CONNECT endpoint when Windows publishes both forms because
-    # it supports the widest set of WinINET clients; honor SOCKS-only settings.
-    candidates.sort(key=lambda item: item[0] != "http")
-    for protocol, endpoint in candidates:
-        for prefix in ("http://", "https://", "socks5://", "socks://"):
-            if endpoint.lower().startswith(prefix):
-                endpoint = endpoint[len(prefix):]
-                break
-        if endpoint.startswith("[") and "]:" in endpoint:
-            host, port = endpoint[1:].rsplit("]:", 1)
-            try:
-                return protocol, host, int(port)
-            except ValueError:
-                continue
-        if endpoint.count(":") == 1:
-            host, port = endpoint.rsplit(":", 1)
-            try:
-                return protocol, host, int(port)
-            except ValueError:
-                continue
-    return None
+    endpoint = parse_proxy_setting(value)
+    return (endpoint.protocol, endpoint.host, endpoint.port) if endpoint else None
 
 
 class AppPicker(tk.Toplevel):
@@ -323,15 +292,40 @@ class RouteWeaverApp(tk.Tk):
             if restored:
                 self.after(200, lambda: messagebox.showinfo("安全恢复", "检测到上次异常退出，已恢复启用分流前的 Windows 系统代理。"))
 
-    def _autodetect_upstream(self) -> None:
+    def _autodetect_upstream(self) -> ProxyEndpoint | None:
         try:
-            enabled, server = self.proxy_manager.current_proxy()
-            detected = _split_proxy(server) if enabled else None
-            if detected and detected[1:] != (self.config_model.listen_host, self.config_model.listen_port):
-                self.config_model.upstream_protocol, self.config_model.upstream_host, self.config_model.upstream_port = detected
+            fallback = ProxyEndpoint(
+                self.config_model.upstream_protocol,
+                self.config_model.upstream_host,
+                self.config_model.upstream_port,
+            )
+            detected = self.proxy_manager.detect_upstream(
+                fallback=fallback,
+                excluded=(self.config_model.listen_host, self.config_model.listen_port),
+            )
+            if detected:
+                self.config_model.upstream_protocol = detected.protocol
+                self.config_model.upstream_host = detected.host
+                self.config_model.upstream_port = detected.port
+                self.config_model.upstream_source = detected.source or "自动识别"
+                self.config_model.upstream_detected_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
                 self.store.save(self.config_model)
+                self.gateway.update_config(self.config_model)
+                if hasattr(self, "upstream_protocol_var"):
+                    self.upstream_protocol_var.set(detected.protocol)
+                    self.upstream_host_var.set(detected.host)
+                    self.upstream_port_var.set(str(detected.port))
+                    self.upstream_source_var.set(self._upstream_source_text())
+                return detected
         except Exception:
-            pass
+            return None
+        return None
+
+    def _upstream_source_text(self) -> str:
+        text = f"识别来源：{self.config_model.upstream_source or '手动设置'}"
+        if self.config_model.upstream_detected_at:
+            text += f"　更新时间：{self.config_model.upstream_detected_at}"
+        return text
 
     def _build_ui(self) -> None:
         header = ttk.Frame(self, padding=(24, 18, 24, 8))
@@ -485,17 +479,19 @@ class RouteWeaverApp(tk.Tk):
         self.upstream_host_var = tk.StringVar(value=self.config_model.upstream_host)
         self.upstream_port_var = tk.StringVar(value=str(self.config_model.upstream_port))
         self.listen_port_var = tk.StringVar(value=str(self.config_model.listen_port))
+        self.upstream_source_var = tk.StringVar(value=self._upstream_source_text())
         ttk.Label(card, text="上游协议", style="Card.TLabel").grid(row=2, column=0, sticky="w", pady=6)
         ttk.Combobox(card, textvariable=self.upstream_protocol_var, values=("http", "socks5"), state="readonly").grid(row=2, column=1, sticky="ew", padx=12)
         ttk.Label(card, text="上游地址", style="Card.TLabel").grid(row=3, column=0, sticky="w", pady=6)
         ttk.Entry(card, textvariable=self.upstream_host_var).grid(row=3, column=1, sticky="ew", padx=12)
         ttk.Label(card, text="端口", style="Card.TLabel").grid(row=4, column=0, sticky="w", pady=6)
         ttk.Entry(card, textvariable=self.upstream_port_var).grid(row=4, column=1, sticky="ew", padx=12)
-        ttk.Button(card, text="从系统代理重新识别", command=self._detect_proxy_clicked).grid(row=2, column=2, rowspan=3)
+        ttk.Button(card, text="自动重新识别", command=self._detect_proxy_clicked).grid(row=2, column=2, rowspan=3)
         ttk.Label(card, text="本地网关端口", style="Card.TLabel").grid(row=5, column=0, sticky="w", pady=6)
         ttk.Entry(card, textvariable=self.listen_port_var).grid(row=5, column=1, sticky="ew", padx=12)
-        ttk.Label(card, text="支持 HTTP CONNECT 与无认证 SOCKS5 上游。", style="Muted.TLabel").grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 2))
-        ttk.Button(card, text="保存网络设置", style="Primary.TButton", command=self._save_settings).grid(row=7, column=2, pady=(14, 0))
+        ttk.Label(card, textvariable=self.upstream_source_var, style="Muted.TLabel").grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 2))
+        ttk.Label(card, text="支持 HTTP CONNECT 与无认证 SOCKS5 上游；启动分流前会再次自动校准。", style="Muted.TLabel").grid(row=7, column=0, columnspan=3, sticky="w", pady=(2, 2))
+        ttk.Button(card, text="保存网络设置", style="Primary.TButton", command=self._save_settings).grid(row=8, column=2, pady=(14, 0))
 
         behavior = ttk.Frame(self.settings_tab, style="Card.TFrame", padding=20)
         behavior.pack(fill="x", pady=12)
@@ -718,10 +714,21 @@ class RouteWeaverApp(tk.Tk):
             protocol = self.upstream_protocol_var.get().strip().lower()
             if protocol not in ("http", "socks5"):
                 raise ValueError("上游协议必须是 http 或 socks5")
+            host = self.upstream_host_var.get().strip()
+            old_endpoint = (
+                self.config_model.upstream_protocol,
+                self.config_model.upstream_host,
+                self.config_model.upstream_port,
+            )
             self.config_model.upstream_protocol = protocol
-            self.config_model.upstream_host = self.upstream_host_var.get().strip()
+            self.config_model.upstream_host = host
             self.config_model.upstream_port = upstream_port
             self.config_model.listen_port = listen_port
+            if (protocol, host, upstream_port) != old_endpoint:
+                self.config_model.upstream_source = "手动设置"
+                self.config_model.upstream_detected_at = ""
+                if hasattr(self, "upstream_source_var"):
+                    self.upstream_source_var.set(self._upstream_source_text())
             self.store.save(self.config_model)
             self.gateway.update_config(self.config_model)
             if not quiet:
@@ -749,24 +756,31 @@ class RouteWeaverApp(tk.Tk):
             messagebox.showerror("保存失败", str(exc))
 
     def _detect_proxy_clicked(self) -> None:
-        if self.active:
-            messagebox.showwarning("请先停用", "请停用分流后再重新识别第三方代理。")
+        before = (
+            self.config_model.upstream_protocol,
+            self.config_model.upstream_host,
+            self.config_model.upstream_port,
+        )
+        detected = self._autodetect_upstream()
+        after = (
+            self.config_model.upstream_protocol,
+            self.config_model.upstream_host,
+            self.config_model.upstream_port,
+        )
+        if detected is None:
+            messagebox.showerror("未识别", "未发现可用的 Windows、PAC、WinHTTP 或本地代理入口。")
             return
-        enabled, server = self.proxy_manager.current_proxy()
-        detected = _split_proxy(server) if enabled else None
-        if not detected:
-            messagebox.showerror("未识别", f"当前系统代理无法解析：{server or '未启用'}")
-            return
-        self.upstream_protocol_var.set(detected[0])
-        self.upstream_host_var.set(detected[1])
-        self.upstream_port_var.set(str(detected[2]))
-        self._save_settings(quiet=True)
-        messagebox.showinfo("识别成功", f"VPN 上游：{detected[0]}://{detected[1]}:{detected[2]}")
+        changed = "，已更新" if after != before else "，设置未变化"
+        messagebox.showinfo(
+            "识别成功",
+            f"VPN 上游：{after[0]}://{after[1]}:{after[2]}\n来源：{self.config_model.upstream_source}{changed}",
+        )
 
     def _toggle(self) -> None:
         self._disable() if self.active else self._enable()
 
     def _enable(self) -> None:
+        self._autodetect_upstream()
         if not self._save_settings(quiet=True):
             return
         try:
@@ -921,8 +935,13 @@ class RouteWeaverApp(tk.Tk):
         if is_admin():
             messagebox.showinfo("管理员权限", "当前已是管理员权限。")
             return
+        # The elevated process must be allowed to acquire the same mutex before
+        # this normal-integrity process exits. Reacquire it if UAC launch fails.
+        release_single_instance()
         if relaunch_as_admin():
             self._exit_app()
+        else:
+            ensure_single_instance()
 
     def _ensure_tray(self) -> bool:
         try:

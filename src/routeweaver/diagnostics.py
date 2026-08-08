@@ -17,6 +17,13 @@ class CheckResult:
 def run_diagnostics(config: AppConfig, proxy_manager: SystemProxyManager) -> list[CheckResult]:
     results: list[CheckResult] = []
     results.append(CheckResult("管理员权限", is_admin(), "已获得" if is_admin() else "未获得（当前功能通常只需当前用户权限）"))
+    source = config.upstream_source or "手动设置"
+    detected_at = f"，更新于 {config.upstream_detected_at}" if config.upstream_detected_at else ""
+    results.append(CheckResult(
+        "当前上游设置",
+        True,
+        f"{config.upstream_protocol}://{config.upstream_host}:{config.upstream_port}；来源：{source}{detected_at}",
+    ))
     try:
         with socket.create_connection((config.upstream_host, config.upstream_port), timeout=3):
             pass
@@ -38,4 +45,3 @@ def run_diagnostics(config: AppConfig, proxy_manager: SystemProxyManager) -> lis
         enabled, server = proxy_manager.current_proxy()
         results.append(CheckResult("接管一致性", enabled and server == expected, f"当前 {server}，期望 {expected}"))
     return results
-

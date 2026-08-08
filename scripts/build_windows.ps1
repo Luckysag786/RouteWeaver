@@ -12,5 +12,5 @@ New-Item -ItemType Directory -Force -Path $ArtifactRoot | Out-Null
 
 & $Python -m PyInstaller --noconfirm --clean --onefile --windowed --exclude-module numpy --name RouteWeaver --paths (Join-Path $ProjectRoot 'src') (Join-Path $ProjectRoot 'scripts\routeweaver_entry.py')
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
-Copy-Item -LiteralPath (Join-Path $ProjectRoot 'dist\RouteWeaver.exe') -Destination (Join-Path $ArtifactRoot 'RouteWeaver-Windows-1.3.1.exe') -Force
-Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $ArtifactRoot 'RouteWeaver-Windows-1.3.1.exe') | Format-List
+Copy-Item -LiteralPath (Join-Path $ProjectRoot 'dist\RouteWeaver.exe') -Destination (Join-Path $ArtifactRoot 'RouteWeaver-Windows-1.3.2.exe') -Force
+Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $ArtifactRoot 'RouteWeaver-Windows-1.3.2.exe') | Format-List

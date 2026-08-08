@@ -7,11 +7,19 @@ from routeweaver.models import AppConfig, RouteMode, Rule, RuleKind
 def test_config_roundtrip(tmp_path):
     path = tmp_path / "config.json"
     store = ConfigStore(path)
-    expected = AppConfig(mode=RouteMode.REVERSE, upstream_port=9000, rules=[Rule(RuleKind.DOMAIN, "example.com")])
+    expected = AppConfig(
+        mode=RouteMode.REVERSE,
+        upstream_port=9000,
+        upstream_source="Windows 系统代理",
+        upstream_detected_at="2026-08-08T12:00:00+08:00",
+        rules=[Rule(RuleKind.DOMAIN, "example.com")],
+    )
     store.save(expected)
     actual = store.load()
     assert actual.mode is RouteMode.REVERSE
     assert actual.upstream_port == 9000
+    assert actual.upstream_source == "Windows 系统代理"
+    assert actual.upstream_detected_at == "2026-08-08T12:00:00+08:00"
     assert actual.rules[0].kind is RuleKind.DOMAIN
 
 

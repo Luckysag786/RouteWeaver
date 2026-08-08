@@ -2,13 +2,17 @@
 
 > VPN 不必“全局接管”：让需要的应用走代理，让国内软件继续直连。
 
-![Version](https://img.shields.io/badge/version-1.3.1-2563eb)
+![Version](https://img.shields.io/badge/version-1.3.2-2563eb)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078d4)
 ![License](https://img.shields.io/badge/license-MIT-16a34a)
 [![CI](https://github.com/Luckysag786/RouteWeaver/actions/workflows/ci.yml/badge.svg)](https://github.com/Luckysag786/RouteWeaver/actions/workflows/ci.yml)
 
 [English](README_EN.md) · [普通用户指南](docs/blog/routeweaver-user-guide.md) · [快速上手](#三分钟上手) · [项目架构](docs/ARCHITECTURE.md) · [能力边界](docs/PLATFORM_LIMITS.md) · [开发故事](docs/blog/routeweaver-launch.md)
+
+## 1.3.2 更新
+
+本次更新修复 VPN 上游公网 IP 偶发检测失败及部分 HTTPS 链路偶发断开，加强系统代理/PAC/WinHTTP/本地代理自动识别，并增加 Windows 单实例安全锁。完整内容见 [CHANGELOG](CHANGELOG.md) 和 [1.3.2 发布说明](docs/RELEASE_NOTES_1.3.2.md)。
 
 ## 为什么做这个项目
 
@@ -34,12 +38,13 @@
 - Windows 系统代理事务式接管；停用或完全退出时恢复原配置。
 - 默认开机启动、关闭后驻留托盘，均可在设置中调整。
 - 配置导入导出、管理员状态、自助提权和链路诊断。
+- Windows 单实例运行，重复点击不会生成多个网关或托盘进程。
 
 ## 三分钟上手
 
 ### 普通用户
 
-1. 在 [Releases](https://github.com/Luckysag786/RouteWeaver/releases) 下载 `RouteWeaver-Windows-Setup-1.3.1.exe`。
+1. 在 [Releases](https://github.com/Luckysag786/RouteWeaver/releases) 下载 `RouteWeaver-Windows-Setup-1.3.2.exe`。
 2. 保持你原来的 VPN/代理软件处于连接状态，不需要关闭或修改它。
 3. 启动路由织网，确认“上游代理”识别为原软件提供的本地 HTTP 或 SOCKS5 地址。
 4. 选择“正向映射”或“反向隔离”，添加应用和网站规则。
@@ -109,7 +114,7 @@ RouteWeaver/
 
 ## 测试与质量
 
-- 27 项 Python 自动化测试。
+- 34 项 Python 自动化测试。
 - Android Java 单元测试与 Debug APK 构建校验。
 - 正向/反向、应用/网站、HTTP/SOCKS5 上游的真实连接验证。
 - Windows 安装、启动、托盘、开机启动与代理恢复冒烟测试。

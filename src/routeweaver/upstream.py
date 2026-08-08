@@ -3,6 +3,8 @@ from __future__ import annotations
 import ipaddress
 import socket
 import struct
+from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 
 SOCKS5_ERRORS = {
@@ -15,6 +17,91 @@ SOCKS5_ERRORS = {
     7: "command not supported",
     8: "address type not supported",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class ProxyEndpoint:
+    protocol: str
+    host: str
+    port: int
+    source: str = ""
+
+    @property
+    def authority(self) -> str:
+        host = f"[{self.host}]" if ":" in self.host and not self.host.startswith("[") else self.host
+        return f"{host}:{self.port}"
+
+
+def parse_proxy_setting(value: str, source: str = "") -> ProxyEndpoint | None:
+    """Parse WinINET/PAC-style proxy strings without guessing credentials.
+
+    WinINET may publish a single ``host:port`` value or a semicolon-delimited
+    mapping such as ``http=...;https=...;socks=...``.  HTTP is preferred when
+    both forms exist because RouteWeaver can forward HTTP and CONNECT through
+    that endpoint; SOCKS-only settings remain supported.
+    """
+    candidates: list[tuple[str, str]] = []
+    for raw_chunk in value.strip().split(";"):
+        chunk = raw_chunk.strip()
+        if not chunk or chunk.casefold() == "direct":
+            continue
+        if "=" in chunk:
+            key, endpoint = chunk.split("=", 1)
+            key = key.strip().casefold()
+            if key not in ("http", "https", "proxy", "socks", "socks5"):
+                continue
+            protocol = "socks5" if key.startswith("socks") else "http"
+        else:
+            endpoint = chunk
+            lowered = endpoint.casefold()
+            protocol = "socks5" if lowered.startswith(("socks://", "socks5://", "socks5h://")) else "http"
+        candidates.append((protocol, endpoint.strip()))
+
+    candidates.sort(key=lambda item: item[0] != "http")
+    for protocol, endpoint in candidates:
+        parsed = urlsplit(endpoint if "://" in endpoint else f"{protocol}://{endpoint}")
+        try:
+            host = parsed.hostname or ""
+            port = parsed.port
+        except ValueError:
+            continue
+        if parsed.username is not None or parsed.password is not None:
+            # Authenticated upstreams need credential-aware storage and UI;
+            # silently dropping credentials would create a misleading setup.
+            continue
+        if not host or port is None or not (1 <= port <= 65535):
+            continue
+        return ProxyEndpoint(protocol, host, port, source)
+    return None
+
+
+def probe_proxy_protocol(host: str, port: int, timeout: float = 1.0) -> str | None:
+    """Identify an unauthenticated local HTTP or SOCKS5 listener.
+
+    SOCKS is checked first with its side-effect-free greeting.  HTTP detection
+    uses an invalid reserved domain and accepts any syntactically valid proxy
+    response, so discovery never depends on a particular public IP service.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.sendall(b"\x05\x01\x00")
+            reply = recv_exact(sock, 2)
+            if reply[0] == 5 and reply[1] in (0, 0xFF):
+                return "socks5"
+    except OSError:
+        pass
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.sendall(
+                b"CONNECT routeweaver.invalid:443 HTTP/1.1\r\n"
+                b"Host: routeweaver.invalid:443\r\nConnection: close\r\n\r\n"
+            )
+            response = sock.recv(64)
+            if response.startswith(b"HTTP/"):
+                return "http"
+    except OSError:
+        pass
+    return None
 
 
 def normalize_upstream_protocol(value: str) -> str:
@@ -92,4 +179,3 @@ def socks5_connect(
     except Exception:
         sock.close()
         raise
-

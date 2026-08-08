@@ -23,9 +23,10 @@
 - `policy.py`：正向/反向规则决策。
 - `upstream.py`：HTTP/SOCKS5 上游连接。
 - `windows_proxy.py`：系统代理事务和异常恢复。
+- `windows_single_instance.py`：Windows 命名互斥体与重复启动保护。
 - `windows_process.py`：本地连接来源进程识别。
 - `windows_catalog.py`：运行进程和已安装应用目录。
-- `ip_geo.py`、`rule_probe.py`：真实出口与规则级验证。
+- `ip_geo.py`、`rule_probe.py`：多服务公网出口与规则级验证。
 - `config.py`、`models.py`：配置持久化与数据模型。
 
 ## 发布原则

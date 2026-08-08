@@ -10,6 +10,19 @@ description: "一款为中国用户真实网络痛点设计的应用与网站分
 
 **English summary:** RouteWeaver is an open-source split-routing gateway for proxy-aware Windows applications. It selectively sends apps or domains through an existing local HTTP/SOCKS5 proxy while keeping other traffic direct. The Android companion manages and verifies rules without pretending it can replace another provider's active VPN tunnel.
 
+## 2026-08-08 更新：RouteWeaver 1.3.2
+
+项目公开发布后的真实使用反馈暴露了两个值得优先修复的问题：部分公网 IP 服务在特定代理链路中会发生 TLS 提前断流，以及 HTTPS CONNECT/双向转发在边界时序下可能偶发中断。本次 1.3.2 更新保留本文原有设计与使用方式，重点完成以下加固：
+
+- 公网出口改为多个独立服务并发探测，单个服务不可用时自动使用健康来源；
+- 调整 CONNECT 确认与 TLS 数据发送顺序，正确传递 TCP 半关闭并继续排空剩余响应；
+- 自动识别 Windows 系统代理、启用前事务备份、PAC、WinHTTP、HTTP/SOCKS5 和常见本地代理端口；
+- 每次启动分流前自动校准并保存上游协议、地址、端口、来源和更新时间；
+- 增加单实例进程安全锁，重复点击程序不会再启动第二个网关或托盘实例；
+- 自动化测试增加到 34 项，并重新构建 Windows 免安装程序与安装包。
+
+最新版下载与 SHA-256 校验值见[中文项目主页](../index.md#直接下载)，完整变更见 [1.3.2 发布说明](../RELEASE_NOTES_1.3.2.md)。
+
 ## 一个很常见、也很折磨人的问题
 
 不少中国用户平时同时使用国内和国外软件。为了访问部分国外服务，我们会打开第三方 VPN 或本地代理；但有些客户端只有开启“全局模式”才稳定。问题随之而来：

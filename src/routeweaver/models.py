@@ -54,6 +54,8 @@ class AppConfig:
     upstream_host: str = "127.0.0.1"
     upstream_port: int = 7888
     upstream_protocol: str = "http"
+    upstream_source: str = "手动设置"
+    upstream_detected_at: str = ""
     rules: list[Rule] = field(default_factory=list)
     start_with_windows: bool = True
     startup_configured: bool = False
@@ -69,6 +71,8 @@ class AppConfig:
             upstream_host=str(data.get("upstream_host", "127.0.0.1")),
             upstream_port=int(data.get("upstream_port", 7888)),
             upstream_protocol=normalize_upstream_protocol(str(data.get("upstream_protocol", "http"))),
+            upstream_source=str(data.get("upstream_source", "手动设置")),
+            upstream_detected_at=str(data.get("upstream_detected_at", "")),
             rules=[Rule.from_dict(item) for item in data.get("rules", [])],
             start_with_windows=bool(data.get("start_with_windows", True)),
             startup_configured=bool(data.get("startup_configured", False)),

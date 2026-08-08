@@ -75,25 +75,54 @@ def _parse_request(header: bytes) -> tuple[str, str, int, bytes]:
 
 
 def _relay(left: socket.socket, right: socket.socket, timeout: float = 180.0) -> None:
-    sockets = [left, right]
-    while sockets:
-        readable, _, exceptional = select.select(sockets, [], sockets, timeout)
+    peers = {left: right, right: left}
+    readers = {left, right}
+    while readers:
+        readable, _, exceptional = select.select(list(readers), [], list(readers), timeout)
         if exceptional or not readable:
             return
         for source in readable:
-            target = right if source is left else left
+            target = peers[source]
             try:
                 data = source.recv(65536)
             except OSError:
-                return
+                data = b""
             if not data:
+                readers.discard(source)
+                # A FIN only closes one direction. Propagate the half-close and
+                # keep draining the peer so late HTTP responses are not cut off.
+                try:
+                    target.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+                continue
+            try:
+                target.sendall(data)
+            except OSError:
                 return
-            target.sendall(data)
+
+
+def _prepare_relay_socket(sock: socket.socket) -> None:
+    sock.settimeout(None)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    except OSError:
+        pass
+
+
+def _connect_succeeded(response: bytes) -> bool:
+    try:
+        status = int(response.split(b"\r\n", 1)[0].split(b" ", 2)[1])
+    except (IndexError, ValueError):
+        return False
+    return 200 <= status < 300
 
 
 class _ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
     daemon_threads = True
+    block_on_close = False
+    request_queue_size = 128
 
 
 class SplitProxyGateway:
@@ -150,6 +179,7 @@ class SplitProxyGateway:
         host = ""
         port = 0
         decision = None
+        response_started = False
         try:
             _, process = resolve_client_process(client_address[0], client_address[1], server_address[0], server_address[1])
             header, remainder = _read_header(client)
@@ -163,34 +193,48 @@ class SplitProxyGateway:
                 protocol = normalize_upstream_protocol(config.upstream_protocol)
                 if protocol == "http":
                     upstream = socket.create_connection((config.upstream_host, config.upstream_port), timeout=15.0)
-                    upstream.sendall(header + remainder)
                     if method == "CONNECT":
+                        # Do not pipeline the client's TLS ClientHello before the
+                        # proxy has accepted CONNECT. Some local VPN proxies
+                        # intermittently reset such optimistic tunnels.
+                        upstream.sendall(header)
                         response, response_extra = _read_header(upstream)
                         if not response:
                             raise OSError("VPN 上游未响应 CONNECT")
                         client.sendall(response + response_extra)
-                        status_line = response.split(b"\r\n", 1)[0]
-                        if b" 2" not in status_line:
+                        response_started = True
+                        if not _connect_succeeded(response):
+                            status_line = response.split(b"\r\n", 1)[0]
                             raise OSError(status_line.decode("iso-8859-1", "replace"))
+                        if remainder:
+                            upstream.sendall(remainder)
+                    else:
+                        upstream.sendall(header + remainder)
                 else:
                     upstream = socks5_connect(
                         config.upstream_host, config.upstream_port, host, port, timeout=15.0,
                     )
                     if method == "CONNECT":
                         client.sendall(b"HTTP/1.1 200 Connection Established\r\nProxy-Agent: RouteWeaver/1.1\r\n\r\n")
+                        response_started = True
                         if remainder:
                             upstream.sendall(remainder)
                     else:
                         upstream.sendall(direct_header + remainder)
+                _prepare_relay_socket(client)
+                _prepare_relay_socket(upstream)
                 _relay(client, upstream)
             else:
                 upstream = socket.create_connection((host, port), timeout=15.0)
                 if method == "CONNECT":
                     client.sendall(b"HTTP/1.1 200 Connection Established\r\nProxy-Agent: RouteWeaver/1.0\r\n\r\n")
+                    response_started = True
                     if remainder:
                         upstream.sendall(remainder)
                 else:
                     upstream.sendall(direct_header + remainder)
+                _prepare_relay_socket(client)
+                _prepare_relay_socket(upstream)
                 _relay(client, upstream)
             matched = decision.matched_rule.value if decision.matched_rule else ""
             self._record(ActivityRecord.now(
@@ -198,10 +242,11 @@ class SplitProxyGateway:
                 target=decision.target, matched_rule=matched, status="完成",
             ))
         except Exception as exc:
-            try:
-                client.sendall(b"HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\nRouteWeaver connection failed")
-            except OSError:
-                pass
+            if not response_started:
+                try:
+                    client.sendall(b"HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n\r\nRouteWeaver connection failed")
+                except OSError:
+                    pass
             target = decision.target if decision else RouteTarget.DIRECT
             self._record(ActivityRecord.now(
                 process_name=display_process_name(process), process_path=process, host=host or "未解析", port=port,
